@@ -403,7 +403,7 @@ export default function App() {
         <main className="rounded-2xl bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 lg:p-6 flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 xl:gap-6 flex-1 min-h-0">
             {/* LEFT: Input + controls */}
-            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto">
+            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto rounded-xl xl:rounded-none xl:bg-transparent xl:p-0 xl:border-0 bg-blue-50/50 border border-blue-100 p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2 shrink-0">
                 <label className="block text-sm font-medium text-slate-700">
                   Dialogue script
@@ -534,7 +534,7 @@ export default function App() {
             </section>
 
             {/* RIGHT: Transcript */}
-            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto">
+            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto rounded-xl xl:rounded-none xl:bg-transparent xl:p-0 xl:border-0 bg-amber-50/50 border border-amber-100 p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                   Transcript
