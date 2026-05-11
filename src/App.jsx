@@ -592,7 +592,7 @@ export default function App() {
         </main>
 
         <footer className="mt-4 py-2 text-center text-xs text-slate-400 shrink-0">
-          Created by Tung Huynh
+          Created by Huynh Thanh Tung
         </footer>
       </div>
     </div>
