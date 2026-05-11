@@ -1,6 +1,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const SAMPLE_DIALOGUE = ''
+const SAMPLE_DIALOGUE = `Doctor: Hi, I'm Dr Lewis. What brings you in today?
+Patient: Hey. I wanted to get checked. I had casual sex about a week ago and I've been thinking about getting some Doxy
+Doctor: Thanks for coming in. We can definitely do a full STI screen today. I'll ask a few questions so I understand your risk and what you might need. Is that okay?
+Patient: Yeah, that's fine.
+Doctor: When was your last STI test?
+Patient: Maybe three or four months ago. Everything was clear.
+Doctor: And since then, how many new partners have you had?
+Patient: Around four guys. All casual.
+Doctor: And you have sex with men only?
+Patient: Yeah, just men.
+Doctor: What kind of sex did you have—oral, anal, both?
+Patient: Both. Mostly I'm the bottom.
+Doctor: And with those partners, did you use condoms always, sometimes, or not usually?
+Patient: Sometimes, it depended on the situation.
+Doctor: The partner last week, did you use condoms?
+Patient: No, we didn't.
+Doctor: Okay. Any symptoms since then—pain when you pee, discharge, sores, rashes, fever, swollen glands?
+Patient: No, nothing like that.
+Doctor: Have you ever had an STI before?
+Patient: I had chlamydia once when I was younger. That's it.
+Doctor: Any history of syphilis?
+Patient: No.
+Doctor: Was there any alcohol or use drugs last time you had sex?
+Patient: I drank a smoked a bit but no, nothing heavy.
+Doctor: Any other drugs at all? like coke, ketamine, pills, GHB?
+Patient: No, none of that.
+Doctor: Thanks for being open. It helps me understand your overall risk. Now, about doxyPEP—can you tell me what made you think you might need it?
+Patient: I saw stuff online saying it can stop STIs after sex.
+Doctor: It's good you asked. DoxyPEP is something we offer to people at higher ongoing risk, but it only works when taken within a certain time window after sex. It needs to be taken no later than 72 hours of exposure, and you're outside that window now. So it wouldn't help for the sex you had last week.
+Patient: Oh, okay. I didn't realise it had a time limit.
+Doctor: That's really common. You do have some risk, but based on what you've told me, you don't meet the criteria for that today.
+Patient: That makes sense.
+Doctor: We can still do a full STI screen today—throat, rectal, and urine tests for chlamydia and gonorrhoea, plus blood tests for HIV, syphilis. That will give us a clear picture.
+Patient: Yeah, that's what I want.
+Doctor: Looking at your notes, I can see that you're up to date with all your Hep A and B vaccines but there's nothing on record about an be HPV vaccine. Have you had the HPV vaccine?
+Patient: I don't think so. I don't remember ever getting it.
+Doctor: In that case, we can offer it today. It protects against genital warts and some cancers, and it's recommended for gay and bisexual men up to age 45.
+Patient: Yeah, I'd like to get that.
+Doctor: Great. We'll get your tests done and give you the first of two HPV dose, you'll have to book an appointment with us in 6-months but don't worry we'll send you a text reminding you closer to the time.
+Doctor: Your test results should come through in a few days so we will be in touch, is that okay?
+Patient: Perfect.
+Doctor: Would you like some condoms today?
+Patient: Yes please.
+Doctor: Cool, let's get those tests done.`
 
 /**
  * Parse raw dialogue text into an array of { speaker, text } lines.
@@ -54,7 +97,7 @@ function pickDefaultVoices(voices) {
 }
 
 export default function App() {
-  const [text, setText] = useState(SAMPLE_DIALOGUE)
+  const [text, setText] = useState('')
   const [voices, setVoices] = useState([])
   const [voiceA, setVoiceA] = useState('')
   const [voiceB, setVoiceB] = useState('')
@@ -384,10 +427,19 @@ export default function App() {
                 placeholder={'Nurse: Hello, how can I help?\nPatient: I just need a check-up.'}
                 className="w-full flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 min-h-[120px]"
               />
-              <p className="mt-2 text-xs text-slate-500">
-                Format each line as{' '}
-                <code className="bg-slate-100 rounded px-1">Speaker: text</code>. The first speaker becomes Character A, the second becomes Character B.
-              </p>
+              <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-xs text-slate-500">
+                  Format each line as{' '}
+                  <code className="bg-slate-100 rounded px-1">Speaker: text</code>. The first speaker becomes Character A, the second becomes Character B.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setText(SAMPLE_DIALOGUE)}
+                  className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline transition"
+                >
+                  Load sample dialogue
+                </button>
+              </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <VoiceSelect
