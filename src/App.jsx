@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const SAMPLE_DIALOGUE = `Nurse: Hiya, I'm Lucy, one of the nurses today. What can I help you with?
-Patient: I just wanted an STI check. I've started seeing someone new and thought it'd be good to get tested.
-Nurse: No problem at all, we can do that. I just need to ask a few questions first, is that alright?
-Patient: Yeah, that's fine.
-Nurse: Are you getting any symptoms at all? Things like unusual discharge, pain when you wee, bleeding between periods, tummy or pelvic pain, any sores or rashes?
-Patient: No, none of that. I feel okay.
-Nurse: Any fevers or swollen glands?
-Patient: No.
-Nurse: When was your last period?
-Patient: About two weeks ago. They've been a bit up and down lately because I've been stressed with work.`
+const SAMPLE_DIALOGUE = ''
 
 /**
  * Parse raw dialogue text into an array of { speaker, text } lines.
@@ -148,6 +139,12 @@ export default function App() {
   }, [parsed, filter])
 
   playableIndicesRef.current = playableIndices
+
+  // Only keep English voices
+  const englishVoices = useMemo(
+    () => voices.filter((v) => v.lang?.toLowerCase().startsWith('en')),
+    [voices],
+  )
 
   const getVoiceByURI = useCallback(
     (uri) => voices.find((v) => v.voiceURI === uri) || null,
@@ -337,30 +334,43 @@ export default function App() {
     (currentPosInQueue === -1 ? true : currentPosInQueue < playableIndices.length - 1)
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-slate-100 via-white to-indigo-50">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        <header className="mb-6 sm:mb-8 text-center">
+    <div className="h-full flex flex-col bg-gradient-to-br from-slate-100 via-white to-indigo-50 overflow-auto">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col flex-1 min-h-0">
+        <header className="mb-4 sm:mb-5 text-center shrink-0">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900">
             Multi-Voice Dialogue Player
           </h1>
-          <p className="mt-2 text-sm sm:text-base text-slate-600">
+          <p className="mt-1 text-sm sm:text-base text-slate-600">
             Paste a script, pick two voices, and let each character speak in turn.
           </p>
         </header>
 
-        <main className="rounded-2xl bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-6 lg:p-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+        <main className="rounded-2xl bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 lg:p-6 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 xl:gap-6 flex-1 min-h-0">
             {/* LEFT: Input + controls */}
-            <section className="flex flex-col min-w-0">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Dialogue script
-              </label>
+            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto">
+              <div className="flex items-center justify-between mb-2 shrink-0">
+                <label className="block text-sm font-medium text-slate-700">
+                  Dialogue script
+                </label>
+                {text && (
+                  <button
+                    type="button"
+                    onClick={() => setText('')}
+                    title="Clear text"
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+                  >
+                    <ClearIcon />
+                    Clear
+                  </button>
+                )}
+              </div>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                rows={12}
+                rows={8}
                 placeholder={'Nurse: Hello, how can I help?\nPatient: I just need a check-up.'}
-                className="w-full flex-1 resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 min-h-[220px] lg:min-h-[320px]"
+                className="w-full flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 min-h-[120px]"
               />
               <p className="mt-2 text-xs text-slate-500">
                 Format each line as{' '}
@@ -372,7 +382,7 @@ export default function App() {
                   label={`Voice for Character A${speakerEntries[0] ? ` · ${speakerEntries[0].label}` : ''}`}
                   value={voiceA}
                   onChange={setVoiceA}
-                  voices={voices}
+                  voices={englishVoices}
                   loading={voicesLoading}
                   accent="indigo"
                 />
@@ -380,7 +390,7 @@ export default function App() {
                   label={`Voice for Character B${speakerEntries[1] ? ` · ${speakerEntries[1].label}` : ''}`}
                   value={voiceB}
                   onChange={setVoiceB}
-                  voices={voices}
+                  voices={englishVoices}
                   loading={voicesLoading}
                   accent="rose"
                 />
@@ -460,7 +470,7 @@ export default function App() {
             </section>
 
             {/* RIGHT: Transcript */}
-            <section className="flex flex-col min-w-0">
+            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto">
               <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                   Transcript
@@ -505,7 +515,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50/40 p-3 sm:p-4 min-h-[220px] lg:min-h-[320px] lg:max-h-[640px] overflow-y-auto">
+              <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50/40 p-3 sm:p-4 min-h-0 overflow-y-auto">
                 {!hasDialogue ? (
                   <div className="h-full flex items-center justify-center text-center text-sm text-slate-400 py-10">
                     Your dialogue will appear here after you paste a script.
@@ -560,8 +570,8 @@ export default function App() {
           </div>
         </main>
 
-        <footer className="mt-6 text-center text-xs text-slate-400">
-          Powered by the native Web Speech API · Voices depend on your operating system and browser.
+        <footer className="mt-4 py-2 text-center text-xs text-slate-400 shrink-0">
+          Powered by the native Web Speech API · Created by Tung Huynh
         </footer>
       </div>
     </div>
@@ -573,6 +583,33 @@ function VoiceSelect({ label, value, onChange, voices, loading, accent }) {
     accent === 'rose'
       ? 'focus:ring-rose-200 focus:border-rose-400'
       : 'focus:ring-indigo-200 focus:border-indigo-400'
+
+  const getGenderLabel = (name) => {
+    const n = name.toLowerCase()
+    const femaleHints = [
+      'female', 'zira', 'susan', 'hazel', 'samantha', 'victoria', 'karen', 'moira',
+      'lucy', 'linda', 'catherine', 'helena', 'elsa', 'sabina', 'heera', 'irina',
+      'haruka', 'hanhan', 'tracy', 'huihui', 'yaoyao', 'ayumi', 'heami',
+      'hedda', 'hortense', 'paulina', 'maria', 'katja', 'caroline', 'julie',
+      'neerja', 'pattara', 'yelena', 'ekaterina', 'lili', 'yating', 'xiaoxiao',
+      'xiaoyi', 'jenny', 'aria', 'sara', 'sonia', 'natasha', 'svetlana',
+      'google us english', 'google uk english female',
+      'google deutsch', 'google español', 'google français', 'google italiano',
+      'google português', 'google polski', 'google nederlands', 'google русский',
+      'google 日本語', 'google 한국의', 'google हिन्दी', 'google bahasa indonesia',
+      'google 普通话', 'google 粵語', 'google 國語'
+    ]
+    const maleHints = [
+      'male', 'david', 'mark', 'george', 'daniel', 'alex', 'fred', 'james',
+      'richard', 'sean', 'ravi', 'frank', 'cosimo', 'pablo', 'paul', 'ichiro',
+      'naayf', 'zhiwei', 'kangkang', 'adam', 'guy', 'ryan', 'liam',
+      'google uk english male'
+    ]
+    if (maleHints.some((h) => n.includes(h))) return 'Men'
+    if (femaleHints.some((h) => n.includes(h))) return 'Women'
+    return 'Women' // default fallback for unrecognized Google TTS voices (most are female)
+  }
+
   return (
     <label className="block min-w-0">
       <span className="block text-sm font-medium text-slate-700 mb-1 truncate">{label}</span>
@@ -585,12 +622,15 @@ function VoiceSelect({ label, value, onChange, voices, loading, accent }) {
         {loading && <option>Loading voices…</option>}
         {!loading && voices.length === 0 && <option>No voices available</option>}
         {!loading &&
-          voices.map((v) => (
-            <option key={v.voiceURI} value={v.voiceURI}>
-              {v.name} — {v.lang}
-              {v.default ? ' (default)' : ''}
-            </option>
-          ))}
+          voices.map((v) => {
+            const gender = getGenderLabel(v.name)
+            return (
+              <option key={v.voiceURI} value={v.voiceURI}>
+                [{gender}] {v.name} — {v.lang}
+                {v.default ? ' (default)' : ''}
+              </option>
+            )
+          })}
       </select>
     </label>
   )
@@ -694,6 +734,15 @@ function NextIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M16 6h2v12h-2zM4 6l10 6-10 6z" />
+    </svg>
+  )
+}
+
+function ClearIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   )
 }
