@@ -592,7 +592,7 @@ export default function App() {
         </main>
 
         <footer className="mt-4 py-2 text-center text-xs text-slate-400 shrink-0">
-          Powered by the native Web Speech API · Created by Tung Huynh
+          Created by Tung Huynh
         </footer>
       </div>
     </div>
