@@ -66,12 +66,19 @@ export default function App() {
   const [error, setError] = useState('')
   // 'all' or a speaker key (lowercased speaker name)
   const [filter, setFilter] = useState('all')
+  // 'sequential' plays all lines in order, 'single' plays only the clicked/current line
+  const [playMode, setPlayMode] = useState('sequential')
 
   const generationRef = useRef(0)
   const currentIndexRef = useRef(-1)
   const settingsRef = useRef({})
   const transcriptListRef = useRef(null)
   const playableIndicesRef = useRef([])
+  const playModeRef = useRef('sequential')
+
+  useEffect(() => {
+    playModeRef.current = playMode
+  }, [playMode])
 
   useEffect(() => {
     settingsRef.current = { voiceA, voiceB, rate, pitch }
@@ -226,6 +233,11 @@ export default function App() {
         }
         utter.onend = () => {
           if (myGen !== generationRef.current) return
+          if (playModeRef.current === 'single') {
+            setIsPlaying(false)
+            setIsPaused(false)
+            return
+          }
           speakAt(pos + 1)
         }
         utter.onerror = (e) => {
@@ -484,9 +496,9 @@ export default function App() {
                 )}
               </div>
 
-              {/* Filter chips: All / per-speaker */}
+              {/* Filter chips + play mode */}
               {hasDialogue && speakerEntries.length > 0 && (
-                <div className="mb-3 flex flex-wrap gap-2">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
                   <FilterChip
                     active={filter === 'all'}
                     onClick={() => setFilter('all')}
@@ -512,6 +524,15 @@ export default function App() {
                       </FilterChip>
                     )
                   })}
+
+                  <select
+                    value={playMode}
+                    onChange={(e) => setPlayMode(e.target.value)}
+                    className="ml-auto rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                  >
+                    <option value="sequential">Auto</option>
+                    <option value="single">Single Line</option>
+                  </select>
                 </div>
               )}
 
