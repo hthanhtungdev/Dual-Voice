@@ -454,7 +454,7 @@ export default function App() {
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col flex-1 min-h-0">
         <header className="mb-4 sm:mb-5 text-center shrink-0">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900">
-            Multi-Voice Dialogue Player
+            Dual-Voice Dialogue Player
           </h1>
           <p className="mt-1 text-sm sm:text-base text-slate-600">
             Paste a script, pick two voices, and let each character speak in turn.
@@ -497,11 +497,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => { setText(SAMPLE_1); setActiveSample(1) }}
-                    className={`text-xs font-medium transition ${
-                      activeSample === 1
+                    className={`text-xs font-medium transition ${activeSample === 1
                         ? 'text-indigo-800 underline underline-offset-2 font-bold'
                         : 'text-indigo-600 hover:text-indigo-800 hover:underline'
-                    }`}
+                      }`}
                   >
                     Sample 1
                   </button>
@@ -509,11 +508,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => { setText(SAMPLE_2); setActiveSample(2) }}
-                    className={`text-xs font-medium transition ${
-                      activeSample === 2
+                    className={`text-xs font-medium transition ${activeSample === 2
                         ? 'text-indigo-800 underline underline-offset-2 font-bold'
                         : 'text-indigo-600 hover:text-indigo-800 hover:underline'
-                    }`}
+                      }`}
                   >
                     Sample 2
                   </button>
@@ -696,7 +694,7 @@ export default function App() {
                                 : 'border-rose-100 bg-rose-50/70 hover:bg-rose-50',
                               isActive
                                 ? 'ring-2 ring-offset-1 ' +
-                                  (slot === 'A' ? 'ring-indigo-400' : 'ring-rose-400')
+                                (slot === 'A' ? 'ring-indigo-400' : 'ring-rose-400')
                                 : '',
                             ].join(' ')}
                           >
