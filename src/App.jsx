@@ -450,9 +450,9 @@ export default function App() {
     (currentPosInQueue === -1 ? true : currentPosInQueue < playableIndices.length - 1)
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-slate-100 via-white to-indigo-50 overflow-auto">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col flex-1 min-h-0">
-        <header className="mb-4 sm:mb-5 text-center shrink-0">
+    <div className="min-h-full xl:h-full xl:overflow-hidden bg-gradient-to-br from-slate-100 via-white to-indigo-50 overflow-auto">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 xl:py-3 flex flex-col min-h-full xl:h-full xl:min-h-0">
+        <header className="mb-3 sm:mb-4 xl:mb-3 text-center shrink-0">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900">
             Dual-Voice Dialogue Player
           </h1>
@@ -461,7 +461,18 @@ export default function App() {
           </p>
         </header>
 
-        <main className="rounded-2xl bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 lg:p-6 flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Audio Samples Section */}
+        <section className="mb-3 sm:mb-4 xl:mb-3 rounded-2xl bg-white shadow-md shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 xl:p-4 shrink-0">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
+            🎧 Audio Samples
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AudioPlayer src="/Sample1.mp3" label="Sample 1" accent="indigo" />
+            <AudioPlayer src="/Sample2.mp3" label="Sample 2" accent="rose" />
+          </div>
+        </section>
+
+        <main className="rounded-2xl bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 lg:p-6 xl:p-4 flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 xl:gap-6 flex-1 min-h-0">
             {/* LEFT: Input + controls */}
             <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto rounded-xl xl:rounded-none xl:bg-transparent xl:p-0 xl:border-0 bg-blue-50/50 border border-blue-100 p-3 sm:p-4">
@@ -611,7 +622,7 @@ export default function App() {
             </section>
 
             {/* RIGHT: Transcript */}
-            <section className="flex flex-col min-w-0 min-h-0 overflow-y-auto rounded-xl xl:rounded-none xl:bg-transparent xl:p-0 xl:border-0 bg-amber-50/50 border border-amber-100 p-3 sm:p-4">
+            <section className="flex flex-col min-w-0 min-h-0 max-h-[70vh] xl:max-h-none overflow-y-auto rounded-xl xl:rounded-none xl:bg-transparent xl:p-0 xl:border-0 bg-amber-50/50 border border-amber-100 p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                   Transcript
@@ -723,6 +734,143 @@ export default function App() {
         <footer className="mt-4 py-2 text-center text-xs text-slate-400 shrink-0">
           Created by Tung Huynh
         </footer>
+      </div>
+    </div>
+  )
+}
+
+// Shared ref: only one AudioPlayer can play at a time
+let activeAudioElement = null
+
+function AudioPlayer({ src, label, accent }) {
+  const audioRef = useRef(null)
+  const [playing, setPlaying] = useState(false)
+  const [duration, setDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+
+  const bgClass = accent === 'rose' ? 'bg-rose-50/50' : 'bg-indigo-50/50'
+  const borderClass = accent === 'rose' ? 'border-rose-100' : 'border-indigo-100'
+  const labelClass = accent === 'rose' ? 'text-rose-600' : 'text-indigo-700'
+  const btnClass = accent === 'rose'
+    ? 'text-rose-600 bg-rose-100 hover:bg-rose-200'
+    : 'text-indigo-600 bg-indigo-100 hover:bg-indigo-200'
+  const progressClass = accent === 'rose' ? 'bg-rose-400' : 'bg-indigo-500'
+  const trackClass = 'bg-slate-200'
+
+  const formatTime = (t) => {
+    if (!t || isNaN(t)) return '0:00'
+    const m = Math.floor(t / 60)
+    const s = Math.floor(t % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  const togglePlay = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (playing) {
+      audio.pause()
+    } else {
+      if (activeAudioElement && activeAudioElement !== audio) {
+        activeAudioElement.pause()
+      }
+      activeAudioElement = audio
+      audio.play()
+    }
+  }
+
+  const restart = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (activeAudioElement && activeAudioElement !== audio) {
+      activeAudioElement.pause()
+    }
+    activeAudioElement = audio
+    audio.currentTime = 0
+    audio.play()
+  }
+
+  const handleSeek = (e) => {
+    const audio = audioRef.current
+    if (!audio || !duration) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const pct = Math.max(0, Math.min(1, x / rect.width))
+    audio.currentTime = pct * duration
+  }
+
+  return (
+    <div className={`flex flex-col gap-3 p-4 rounded-xl ${bgClass} border ${borderClass}`}>
+      <div className="flex items-center justify-between">
+        <span className={`text-sm font-medium ${labelClass}`}>{label}</span>
+        <a
+          href={src}
+          download
+          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${btnClass} transition`}
+        >
+          <DownloadIcon />
+          Download
+        </a>
+      </div>
+
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onLoadedMetadata={(e) => setDuration(e.target.duration)}
+        onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCurrentTime(0) }}
+      />
+
+      {/* Progress bar */}
+      <div
+        className={`relative w-full h-2 rounded-full ${trackClass} cursor-pointer`}
+        onClick={handleSeek}
+      >
+        <div
+          className={`absolute top-0 left-0 h-full rounded-full ${progressClass} transition-all duration-150`}
+          style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
+        />
+      </div>
+
+      {/* Controls row */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={restart}
+          title="Nghe lại"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+        >
+          <RestartIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5) }}
+          title="-5s"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition text-xs font-bold"
+        >
+          -5
+        </button>
+        <button
+          type="button"
+          onClick={togglePlay}
+          title={playing ? 'Pause' : 'Play'}
+          className={`inline-flex items-center justify-center w-9 h-9 rounded-full text-white transition ${accent === 'rose' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+        >
+          {playing ? <PauseIcon /> : <PlayIcon />}
+        </button>
+        <button
+          type="button"
+          onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 5) }}
+          title="+5s"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 transition text-xs font-bold"
+        >
+          +5
+        </button>
+        <span className="ml-auto text-xs text-slate-500 tabular-nums">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </span>
       </div>
     </div>
   )
@@ -893,6 +1041,25 @@ function ClearIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  )
+}
+
+function RestartIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
     </svg>
   )
 }
