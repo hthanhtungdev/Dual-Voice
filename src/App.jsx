@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const SAMPLE_DIALOGUE = `Doctor: Hi, I'm Dr Lewis. What brings you in today?
+const SAMPLE_1 = `Doctor: Hi, I'm Dr Lewis. What brings you in today?
 Patient: Hey. I wanted to get checked. I had casual sex about a week ago and I've been thinking about getting some Doxy
 Doctor: Thanks for coming in. We can definitely do a full STI screen today. I'll ask a few questions so I understand your risk and what you might need. Is that okay?
 Patient: Yeah, that's fine.
@@ -44,6 +44,66 @@ Patient: Perfect.
 Doctor: Would you like some condoms today?
 Patient: Yes please.
 Doctor: Cool, let's get those tests done.`
+
+const SAMPLE_2 = `Nurse: Hiya, I'm Lucy, one of the nurses today. What can I help you with?
+Patient: I just wanted an STI check. I've started seeing someone new and thought it'd be good to get tested.
+Nurse: No problem at all, we can do that. I just need to ask a few questions first, is that alright?
+Patient: Yeah, that's fine.
+Nurse: Are you getting any symptoms at all? Things like unusual discharge, pain when you wee, bleeding between periods, tummy or pelvic pain, any sores or rashes?
+Patient: No, none of that. I feel okay.
+Nurse: Any fevers or swollen glands?
+Patient: No.
+Nurse: When was your last period?
+Patient: About two weeks ago. They've been a bit up and down lately because I've been stressed with work.
+Nurse: Any chance you could be pregnant?
+Patient: No. I'm on the pill and I take it every day.
+Nurse: Any medical conditions or allergies?
+Patient: No allergies. Just mild asthma but it's under control.
+Nurse: Have you had any STIs before?
+Patient: Yeah, I had chlamydia when I was about 19, but that got treated.
+Nurse: Have you ever had tests for HIV or syphilis, or hepatitis?
+Patient: Yeah, my GP did them last year. Everything was clear.
+Nurse: Are you sexually active at the moment?
+Patient: Yes.
+Nurse: When was the last time you had sex?
+Patient: Four days ago.
+Nurse: Was that with the same partner you mentioned?
+Patient: Yeah.
+Nurse: And how long have you been seeing them?
+Patient: About six weeks.
+Nurse: How many partners have you had in the last three months?
+Patient: Just him.
+Nurse: Do you know if he's seeing anyone else?
+Patient: He says he's not. We haven't had the official "are we exclusive" chat, but I don't think he is.
+Nurse: Okay. What kind of sex do you have together — oral, vaginal, anal?
+Patient: Oral and vaginal. No anal.
+Nurse: And condoms — do you use them?
+Patient: We did at the start, like the first couple of times, but then stopped. Probably shouldn't have, which is why I'm here.
+Nurse: Any partners you're worried might have an STI?
+Patient: Not that I know of. He said he had a test "a while ago" but didn't say when.
+Nurse: When you have sex, do either of you drink or use drugs?
+Patient: Just drinks sometimes. The times we didn't use condoms were when we'd had a few. No drugs.
+Nurse: Okay. Are you feeling safe in the relationship?
+Patient: Yeah, completely.
+Nurse: No pressure around sex or contraception?
+Patient: No, nothing like that.
+Nurse: Any concerns about controlling behaviour or anything that makes you uncomfortable?
+Patient: No.
+Nurse: You're on the pill — is it suiting you alright?
+Patient: Yeah, it's fine. I changed to a different one a few months ago because the old one made me spot, but this one's been fine.
+Nurse: And you remember to take it most days?
+Patient: Yeah, I'm good with it.
+Nurse: Right. Because you've got a new partner and you haven't always used condoms, we'll do a full STI screen today.
+Patient: Yeah, that's what I want.
+Nurse: So that'll be a self-taken vaginal swab for chlamydia and gonorrhoea, and a blood test for HIV and syphilis. We don't need to check for hepatitis today as you don't have any risks for that.
+Patient: Okay, that's fine.
+Nurse: Results normally come through in a few days. If anything comes back positive we'll give you a call, and if everything's negative you'll get a text.
+Patient: Perfect.
+Nurse: Would you like some condoms today?
+Patient: Yes please.
+Nurse: Great. And if you notice anything unusual — discharge, pain, bleeding, anything at all — just come back in.
+Patient: I will.
+Nurse: Great. Let's get those tests done.`
 
 /**
  * Parse raw dialogue text into an array of { speaker, text } lines.
@@ -98,6 +158,7 @@ function pickDefaultVoices(voices) {
 
 export default function App() {
   const [text, setText] = useState('')
+  const [activeSample, setActiveSample] = useState(null)
   const [voices, setVoices] = useState([])
   const [voiceA, setVoiceA] = useState('')
   const [voiceB, setVoiceB] = useState('')
@@ -432,13 +493,31 @@ export default function App() {
                   Format each line as{' '}
                   <code className="bg-slate-100 rounded px-1">Speaker: text</code>. The first speaker becomes Character A, the second becomes Character B.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setText(SAMPLE_DIALOGUE)}
-                  className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline transition"
-                >
-                  Load sample dialogue
-                </button>
+                <div className="shrink-0 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setText(SAMPLE_1); setActiveSample(1) }}
+                    className={`text-xs font-medium transition ${
+                      activeSample === 1
+                        ? 'text-indigo-800 underline underline-offset-2 font-bold'
+                        : 'text-indigo-600 hover:text-indigo-800 hover:underline'
+                    }`}
+                  >
+                    Sample 1
+                  </button>
+                  <span className="text-xs text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => { setText(SAMPLE_2); setActiveSample(2) }}
+                    className={`text-xs font-medium transition ${
+                      activeSample === 2
+                        ? 'text-indigo-800 underline underline-offset-2 font-bold'
+                        : 'text-indigo-600 hover:text-indigo-800 hover:underline'
+                    }`}
+                  >
+                    Sample 2
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
