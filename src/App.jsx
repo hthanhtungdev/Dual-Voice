@@ -156,14 +156,26 @@ function pickDefaultVoices(voices) {
   return { a: a?.voiceURI || '', b: b?.voiceURI || '' }
 }
 
+const STORAGE_KEY = 'dual-voice-state'
+
+const loadStored = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
 export default function App() {
-  const [text, setText] = useState('')
-  const [activeSample, setActiveSample] = useState(null)
+  const stored = loadStored()
+  const [text, setText] = useState(stored.text || '')
+  const [activeSample, setActiveSample] = useState(stored.activeSample ?? null)
   const [voices, setVoices] = useState([])
-  const [voiceA, setVoiceA] = useState('')
-  const [voiceB, setVoiceB] = useState('')
-  const [rate, setRate] = useState(1)
-  const [pitch, setPitch] = useState(1)
+  const [voiceA, setVoiceA] = useState(stored.voiceA || '')
+  const [voiceB, setVoiceB] = useState(stored.voiceB || '')
+  const [rate, setRate] = useState(stored.rate ?? 1)
+  const [pitch, setPitch] = useState(stored.pitch ?? 1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -171,7 +183,7 @@ export default function App() {
   // 'all' or a speaker key (lowercased speaker name)
   const [filter, setFilter] = useState('all')
   // 'sequential' plays all lines in order, 'single' plays only the clicked/current line
-  const [playMode, setPlayMode] = useState('sequential')
+  const [playMode, setPlayMode] = useState(stored.playMode || 'sequential')
 
   const generationRef = useRef(0)
   const currentIndexRef = useRef(-1)
@@ -187,6 +199,16 @@ export default function App() {
   useEffect(() => {
     settingsRef.current = { voiceA, voiceB, rate, pitch }
   }, [voiceA, voiceB, rate, pitch])
+
+  // Persist user state to localStorage
+  useEffect(() => {
+    try {
+      const data = { text, activeSample, voiceA, voiceB, rate, pitch, playMode }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    } catch {
+      // ignore (storage full / disabled)
+    }
+  }, [text, activeSample, voiceA, voiceB, rate, pitch, playMode])
 
   useEffect(() => {
     const synth = window.speechSynthesis
