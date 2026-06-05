@@ -176,6 +176,7 @@ export default function App() {
   const [voiceB, setVoiceB] = useState(stored.voiceB || '')
   const [rateA, setRateA] = useState(stored.rateA ?? stored.rate ?? 1)
   const [rateB, setRateB] = useState(stored.rateB ?? stored.rate ?? 1)
+  const [lineRates, setLineRates] = useState(stored.lineRates || {})
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -197,18 +198,23 @@ export default function App() {
   }, [playMode])
 
   useEffect(() => {
-    settingsRef.current = { voiceA, voiceB, rateA, rateB }
-  }, [voiceA, voiceB, rateA, rateB])
+    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates }
+  }, [voiceA, voiceB, rateA, rateB, lineRates])
 
   // Persist user state to localStorage
   useEffect(() => {
     try {
-      const data = { text, activeSample, voiceA, voiceB, rateA, rateB, playMode }
+      const data = { text, activeSample, voiceA, voiceB, rateA, rateB, playMode, lineRates }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // ignore (storage full / disabled)
     }
-  }, [text, activeSample, voiceA, voiceB, rateA, rateB, playMode])
+  }, [text, activeSample, voiceA, voiceB, rateA, rateB, playMode, lineRates])
+
+  // Reset line-specific rates when the dialogue script text changes
+  useEffect(() => {
+    setLineRates({})
+  }, [text])
 
   useEffect(() => {
     const synth = window.speechSynthesis
@@ -344,12 +350,12 @@ export default function App() {
         const assignment = speakerAssignments[speaker.toLowerCase()]
         const slot = assignment?.slot || 'A'
 
-        const { voiceA: va, voiceB: vb, rateA: ra, rateB: rb } = settingsRef.current
+        const { voiceA: va, voiceB: vb, rateA: ra, rateB: rb, lineRates: lr } = settingsRef.current
         const voice = getVoiceByURI(slot === 'A' ? va : vb)
 
         const utter = new SpeechSynthesisUtterance(line)
         if (voice) utter.voice = voice
-        utter.rate = slot === 'A' ? ra : rb
+        utter.rate = lr?.[i] ?? (slot === 'A' ? ra : rb)
         utter.lang = voice?.lang || 'en-US'
 
         utter.onstart = () => {
@@ -729,33 +735,82 @@ export default function App() {
                       const isActive = i === currentIndex
                       return (
                         <li key={i} data-line-index={i}>
-                          <button
-                            type="button"
-                            onClick={() => jumpTo(i)}
-                            title="Play from this line"
+                          <div
                             className={[
-                              'w-full text-left rounded-lg border px-3 py-2 text-sm transition hover:shadow-sm',
+                              'rounded-lg border p-3 transition hover:shadow-sm flex flex-col gap-2 bg-white',
                               slot === 'A'
-                                ? 'border-indigo-100 bg-indigo-50/70 hover:bg-indigo-50'
-                                : 'border-rose-100 bg-rose-50/70 hover:bg-rose-50',
+                                ? 'border-indigo-100 bg-indigo-50/50'
+                                : 'border-rose-100 bg-rose-50/50',
                               isActive
                                 ? 'ring-2 ring-offset-1 ' +
                                 (slot === 'A' ? 'ring-indigo-400' : 'ring-rose-400')
                                 : '',
                             ].join(' ')}
                           >
-                            <span
+                            {/* Line header with character name and custom rate slider */}
+                            <div className="flex items-center justify-between gap-4">
+                              <span
+                                className={[
+                                  'rounded-full px-2 py-0.5 text-xs font-semibold text-white',
+                                  slot === 'A' ? 'bg-indigo-600' : 'bg-rose-500',
+                                ].join(' ')}
+                              >
+                                {line.speaker}
+                              </span>
+
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 select-none">
+                                <span>Rate: {(lineRates[i] ?? (slot === 'A' ? rateA : rateB)).toFixed(2)}x</span>
+                                <input
+                                  type="range"
+                                  min="0.5"
+                                  max="2.0"
+                                  step="0.05"
+                                  value={lineRates[i] ?? (slot === 'A' ? rateA : rateB)}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value)
+                                    setLineRates((prev) => ({ ...prev, [i]: val }))
+                                  }}
+                                  className={[
+                                    'w-20 sm:w-28 cursor-pointer h-1 rounded-lg bg-slate-200 appearance-none',
+                                    slot === 'A' ? 'accent-indigo-600' : 'accent-rose-500',
+                                  ].join(' ')}
+                                />
+                                {lineRates[i] !== undefined && lineRates[i] !== (slot === 'A' ? rateA : rateB) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLineRates((prev) => {
+                                        const copy = { ...prev }
+                                        delete copy[i]
+                                        return copy
+                                      })
+                                    }}
+                                    title="Reset to character default speed"
+                                    className="text-slate-400 hover:text-rose-600 transition p-0.5"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Clickable text area to jump to / play this line */}
+                            <button
+                              type="button"
+                              onClick={() => jumpTo(i)}
+                              title="Play from this line"
                               className={[
-                                'mr-2 inline-block rounded-full px-2 py-0.5 text-xs font-semibold align-middle',
-                                slot === 'A' ? 'bg-indigo-600 text-white' : 'bg-rose-500 text-white',
+                                'w-full text-left text-sm leading-relaxed transition focus:outline-none break-words',
+                                isActive
+                                  ? 'font-semibold text-slate-950'
+                                  : 'text-slate-700 hover:text-slate-950 hover:underline decoration-slate-300',
                               ].join(' ')}
                             >
-                              {line.speaker}
-                            </span>
-                            <span className="text-slate-800 align-middle break-words">
                               {line.text}
-                            </span>
-                          </button>
+                            </button>
+                          </div>
                         </li>
                       )
                     })}
