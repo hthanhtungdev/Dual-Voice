@@ -174,8 +174,8 @@ export default function App() {
   const [voices, setVoices] = useState([])
   const [voiceA, setVoiceA] = useState(stored.voiceA || '')
   const [voiceB, setVoiceB] = useState(stored.voiceB || '')
-  const [rate, setRate] = useState(stored.rate ?? 1)
-  const [pitch, setPitch] = useState(stored.pitch ?? 1)
+  const [rateA, setRateA] = useState(stored.rateA ?? stored.rate ?? 1)
+  const [rateB, setRateB] = useState(stored.rateB ?? stored.rate ?? 1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -197,18 +197,18 @@ export default function App() {
   }, [playMode])
 
   useEffect(() => {
-    settingsRef.current = { voiceA, voiceB, rate, pitch }
-  }, [voiceA, voiceB, rate, pitch])
+    settingsRef.current = { voiceA, voiceB, rateA, rateB }
+  }, [voiceA, voiceB, rateA, rateB])
 
   // Persist user state to localStorage
   useEffect(() => {
     try {
-      const data = { text, activeSample, voiceA, voiceB, rate, pitch, playMode }
+      const data = { text, activeSample, voiceA, voiceB, rateA, rateB, playMode }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // ignore (storage full / disabled)
     }
-  }, [text, activeSample, voiceA, voiceB, rate, pitch, playMode])
+  }, [text, activeSample, voiceA, voiceB, rateA, rateB, playMode])
 
   useEffect(() => {
     const synth = window.speechSynthesis
@@ -344,13 +344,12 @@ export default function App() {
         const assignment = speakerAssignments[speaker.toLowerCase()]
         const slot = assignment?.slot || 'A'
 
-        const { voiceA: va, voiceB: vb, rate: r, pitch: p } = settingsRef.current
+        const { voiceA: va, voiceB: vb, rateA: ra, rateB: rb } = settingsRef.current
         const voice = getVoiceByURI(slot === 'A' ? va : vb)
 
         const utter = new SpeechSynthesisUtterance(line)
         if (voice) utter.voice = voice
-        utter.rate = r
-        utter.pitch = p
+        utter.rate = slot === 'A' ? ra : rb
         utter.lang = voice?.lang || 'en-US'
 
         utter.onstart = () => {
@@ -571,8 +570,22 @@ export default function App() {
               </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Slider label="Rate" min={0.5} max={1.5} step={0.05} value={rate} onChange={setRate} />
-                <Slider label="Pitch" min={0.5} max={1.5} step={0.05} value={pitch} onChange={setPitch} />
+                <Slider
+                  label={`Rate for Character A${speakerEntries[0] ? ` · ${speakerEntries[0].label}` : ''}`}
+                  min={0.5}
+                  max={2.0}
+                  step={0.05}
+                  value={rateA}
+                  onChange={setRateA}
+                />
+                <Slider
+                  label={`Rate for Character B${speakerEntries[1] ? ` · ${speakerEntries[1].label}` : ''}`}
+                  min={0.5}
+                  max={2.0}
+                  step={0.05}
+                  value={rateB}
+                  onChange={setRateB}
+                />
               </div>
 
               {/* Playback controls */}
