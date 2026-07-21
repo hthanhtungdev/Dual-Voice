@@ -158,6 +158,20 @@ function pickDefaultVoices(voices) {
 
 const STORAGE_KEY = 'dual-voice-state'
 
+const PUTER_VOICES = [
+  { id: 'Matthew', name: 'Matthew (Male)', gender: 'male', engine: 'neural' },
+  { id: 'Joey', name: 'Joey (Male)', gender: 'male', engine: 'neural' },
+  { id: 'Kevin', name: 'Kevin (Male)', gender: 'male', engine: 'neural' },
+  { id: 'Joanna', name: 'Joanna (Female)', gender: 'female', engine: 'neural' },
+  { id: 'Salli', name: 'Salli (Female)', gender: 'female', engine: 'neural' },
+  { id: 'Kendra', name: 'Kendra (Female)', gender: 'female', engine: 'neural' },
+  { id: 'Ivy', name: 'Ivy (Female)', gender: 'female', engine: 'neural' },
+  { id: 'Ruth', name: 'Ruth (Female)', gender: 'female', engine: 'neural' },
+  { id: 'Gregory', name: 'Gregory (Male)', gender: 'male', engine: 'neural' },
+  { id: 'Danielle', name: 'Danielle (Female)', gender: 'female', engine: 'neural' },
+  { id: 'Stephen', name: 'Stephen (Male)', gender: 'male', engine: 'neural' },
+]
+
 const loadStored = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -169,11 +183,14 @@ const loadStored = () => {
 
 export default function App() {
   const stored = loadStored()
+  const [ttsEngine, setTtsEngine] = useState(stored.ttsEngine || 'browser')
   const [text, setText] = useState(stored.text || '')
   const [activeSample, setActiveSample] = useState(stored.activeSample ?? null)
   const [voices, setVoices] = useState([])
   const [voiceA, setVoiceA] = useState(stored.voiceA || '')
   const [voiceB, setVoiceB] = useState(stored.voiceB || '')
+  const [puterVoiceA, setPuterVoiceA] = useState(stored.puterVoiceA || 'Matthew')
+  const [puterVoiceB, setPuterVoiceB] = useState(stored.puterVoiceB || 'Joanna')
   const [rateA, setRateA] = useState(stored.rateA ?? stored.rate ?? 1)
   const [rateB, setRateB] = useState(stored.rateB ?? stored.rate ?? 1)
   const [lineRates, setLineRates] = useState(stored.lineRates || {})
@@ -189,6 +206,7 @@ export default function App() {
   const generationRef = useRef(0)
   const currentIndexRef = useRef(-1)
   const settingsRef = useRef({})
+  const puterAudioRef = useRef(null)
   const transcriptListRef = useRef(null)
   const playableIndicesRef = useRef([])
   const playModeRef = useRef('sequential')
@@ -198,18 +216,18 @@ export default function App() {
   }, [playMode])
 
   useEffect(() => {
-    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates }
-  }, [voiceA, voiceB, rateA, rateB, lineRates])
+    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB }
+  }, [voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB])
 
   // Persist user state to localStorage
   useEffect(() => {
     try {
-      const data = { text, activeSample, voiceA, voiceB, rateA, rateB, playMode, lineRates }
+      const data = { text, activeSample, voiceA, voiceB, puterVoiceA, puterVoiceB, rateA, rateB, playMode, lineRates, ttsEngine }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // ignore (storage full / disabled)
     }
-  }, [text, activeSample, voiceA, voiceB, rateA, rateB, playMode, lineRates])
+  }, [text, activeSample, voiceA, voiceB, puterVoiceA, puterVoiceB, rateA, rateB, playMode, lineRates, ttsEngine])
 
   // Reset line-specific rates when the dialogue script text changes
   useEffect(() => {
@@ -308,11 +326,6 @@ export default function App() {
 
   const startFrom = useCallback(
     (startAt) => {
-      const synth = window.speechSynthesis
-      if (!synth) {
-        setError('Your browser does not support the Web Speech API.')
-        return
-      }
       if (!parsed.length) {
         setError('There is nothing to read. Paste a dialogue first.')
         return
@@ -330,7 +343,11 @@ export default function App() {
       generationRef.current += 1
       const myGen = generationRef.current
 
-      synth.cancel()
+      window.speechSynthesis?.cancel()
+      if (puterAudioRef.current) {
+        puterAudioRef.current.pause()
+        puterAudioRef.current = null
+      }
       setError('')
       setIsPlaying(true)
       setIsPaused(false)
@@ -350,37 +367,95 @@ export default function App() {
         const assignment = speakerAssignments[speaker.toLowerCase()]
         const slot = assignment?.slot || 'A'
 
-        const { voiceA: va, voiceB: vb, rateA: ra, rateB: rb, lineRates: lr } = settingsRef.current
-        const voice = getVoiceByURI(slot === 'A' ? va : vb)
+        const settings = settingsRef.current
+        const engine = settings.ttsEngine || 'browser'
 
-        const utter = new SpeechSynthesisUtterance(line)
-        if (voice) utter.voice = voice
-        utter.rate = lr?.[i] ?? (slot === 'A' ? ra : rb)
-        utter.lang = voice?.lang || 'en-US'
-
-        utter.onstart = () => {
-          if (myGen !== generationRef.current) return
+        if (engine === 'puter') {
+          // Puter.js TTS
           updateCurrent(i)
-        }
-        utter.onend = () => {
-          if (myGen !== generationRef.current) return
-          if (playModeRef.current === 'single') {
+          const voiceId = slot === 'A' ? settings.puterVoiceA : settings.puterVoiceB
+          const speakRate = settings.lineRates?.[i] ?? (slot === 'A' ? settings.rateA : settings.rateB)
+          const voiceInfo = PUTER_VOICES.find(v => v.id === voiceId)
+          const engine = voiceInfo?.engine || 'neural'
+
+          if (typeof window.puter === 'undefined' || !window.puter?.ai?.txt2speech) {
+            setError('Puter.js is not loaded. Check your internet connection.')
             setIsPlaying(false)
-            setIsPaused(false)
             return
           }
-          speakAt(pos + 1)
-        }
-        utter.onerror = (e) => {
-          if (myGen !== generationRef.current) return
-          if (e.error === 'canceled' || e.error === 'interrupted') return
-          setError(`Speech error: ${e.error}`)
-          setIsPlaying(false)
-          setIsPaused(false)
-          updateCurrent(-1)
-        }
 
-        synth.speak(utter)
+          window.puter.ai.txt2speech(line, { voice: voiceId, engine })
+            .then((audio) => {
+              if (myGen !== generationRef.current) return
+              // audio is a Blob or Audio element
+              const audioEl = audio instanceof Audio ? audio : new Audio(URL.createObjectURL(audio))
+              audioEl.playbackRate = speakRate
+              puterAudioRef.current = audioEl
+              audioEl.onended = () => {
+                if (myGen !== generationRef.current) return
+                puterAudioRef.current = null
+                if (playModeRef.current === 'single') {
+                  setIsPlaying(false)
+                  setIsPaused(false)
+                  return
+                }
+                speakAt(pos + 1)
+              }
+              audioEl.onerror = () => {
+                if (myGen !== generationRef.current) return
+                puterAudioRef.current = null
+                setError('Puter TTS playback error.')
+                setIsPlaying(false)
+                updateCurrent(-1)
+              }
+              audioEl.play()
+            })
+            .catch((err) => {
+              if (myGen !== generationRef.current) return
+              setError(`Puter TTS error: ${err.message || err}`)
+              setIsPlaying(false)
+              updateCurrent(-1)
+            })
+        } else {
+          // Browser Web Speech API
+          const synth = window.speechSynthesis
+          if (!synth) {
+            setError('Your browser does not support the Web Speech API.')
+            return
+          }
+
+          const { voiceA: va, voiceB: vb, rateA: ra, rateB: rb, lineRates: lr } = settings
+          const voice = getVoiceByURI(slot === 'A' ? va : vb)
+
+          const utter = new SpeechSynthesisUtterance(line)
+          if (voice) utter.voice = voice
+          utter.rate = lr?.[i] ?? (slot === 'A' ? ra : rb)
+          utter.lang = voice?.lang || 'en-US'
+
+          utter.onstart = () => {
+            if (myGen !== generationRef.current) return
+            updateCurrent(i)
+          }
+          utter.onend = () => {
+            if (myGen !== generationRef.current) return
+            if (playModeRef.current === 'single') {
+              setIsPlaying(false)
+              setIsPaused(false)
+              return
+            }
+            speakAt(pos + 1)
+          }
+          utter.onerror = (e) => {
+            if (myGen !== generationRef.current) return
+            if (e.error === 'canceled' || e.error === 'interrupted') return
+            setError(`Speech error: ${e.error}`)
+            setIsPlaying(false)
+            setIsPaused(false)
+            updateCurrent(-1)
+          }
+
+          synth.speak(utter)
+        }
       }
 
       speakAt(queuePos)
@@ -390,7 +465,11 @@ export default function App() {
 
   const play = useCallback(() => {
     if (isPaused) {
-      window.speechSynthesis.resume()
+      if (puterAudioRef.current) {
+        puterAudioRef.current.play()
+      } else {
+        window.speechSynthesis.resume()
+      }
       setIsPaused(false)
       return
     }
@@ -408,13 +487,21 @@ export default function App() {
 
   const pause = useCallback(() => {
     if (!isPlaying || isPaused) return
-    window.speechSynthesis.pause()
+    if (puterAudioRef.current) {
+      puterAudioRef.current.pause()
+    } else {
+      window.speechSynthesis.pause()
+    }
     setIsPaused(true)
   }, [isPlaying, isPaused])
 
   const stop = useCallback(() => {
     generationRef.current += 1
     window.speechSynthesis.cancel()
+    if (puterAudioRef.current) {
+      puterAudioRef.current.pause()
+      puterAudioRef.current = null
+    }
     setIsPlaying(false)
     setIsPaused(false)
     updateCurrent(-1)
@@ -454,6 +541,10 @@ export default function App() {
     return () => {
       generationRef.current += 1
       window.speechSynthesis?.cancel()
+      if (puterAudioRef.current) {
+        puterAudioRef.current.pause()
+        puterAudioRef.current = null
+      }
     }
   }, [])
 
@@ -461,6 +552,10 @@ export default function App() {
   useEffect(() => {
     generationRef.current += 1
     window.speechSynthesis?.cancel()
+    if (puterAudioRef.current) {
+      puterAudioRef.current.pause()
+      puterAudioRef.current = null
+    }
     setIsPlaying(false)
     setIsPaused(false)
     updateCurrent(-1)
@@ -488,7 +583,25 @@ export default function App() {
           </p>
         </header>
 
-        {/* Audio Samples Section */}
+        {/* TTS Engine Toggle */}
+        <div className="mb-3 sm:mb-4 xl:mb-3 flex items-center justify-center gap-3 shrink-0">
+          <span className={`text-sm font-medium ${ttsEngine === 'browser' ? 'text-slate-900' : 'text-slate-400'}`}>
+            🖥️ Browser TTS
+          </span>
+          <button
+            type="button"
+            onClick={() => { stop(); setTtsEngine(ttsEngine === 'browser' ? 'puter' : 'browser') }}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${ttsEngine === 'puter' ? 'bg-emerald-500' : 'bg-slate-300'}`}
+            aria-label="Toggle TTS engine"
+          >
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform ${ttsEngine === 'puter' ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+          <span className={`text-sm font-medium ${ttsEngine === 'puter' ? 'text-emerald-700' : 'text-slate-400'}`}>
+            ☁️ Cloud TTS
+          </span>
+        </div>
+
+        {/* Audio Samples Section - hidden for now
         <section className="mb-3 sm:mb-4 xl:mb-3 rounded-2xl bg-white shadow-md shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 xl:p-4 shrink-0">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
             🎧 Audio Samples
@@ -498,6 +611,7 @@ export default function App() {
             <AudioPlayer src="/Sample2.mp3" label="Sample 2" accent="rose" />
           </div>
         </section>
+        */}
 
         <main className="rounded-2xl bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 sm:p-5 lg:p-6 xl:p-4 flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 xl:gap-6 flex-1 min-h-0">
@@ -557,22 +671,41 @@ export default function App() {
               </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <VoiceSelect
-                  label={`Voice for Character A${speakerEntries[0] ? ` · ${speakerEntries[0].label}` : ''}`}
-                  value={voiceA}
-                  onChange={setVoiceA}
-                  voices={englishVoices}
-                  loading={voicesLoading}
-                  accent="indigo"
-                />
-                <VoiceSelect
-                  label={`Voice for Character B${speakerEntries[1] ? ` · ${speakerEntries[1].label}` : ''}`}
-                  value={voiceB}
-                  onChange={setVoiceB}
-                  voices={englishVoices}
-                  loading={voicesLoading}
-                  accent="rose"
-                />
+                {ttsEngine === 'browser' ? (
+                  <>
+                    <VoiceSelect
+                      label={`Voice for Character A${speakerEntries[0] ? ` · ${speakerEntries[0].label}` : ''}`}
+                      value={voiceA}
+                      onChange={setVoiceA}
+                      voices={englishVoices}
+                      loading={voicesLoading}
+                      accent="indigo"
+                    />
+                    <VoiceSelect
+                      label={`Voice for Character B${speakerEntries[1] ? ` · ${speakerEntries[1].label}` : ''}`}
+                      value={voiceB}
+                      onChange={setVoiceB}
+                      voices={englishVoices}
+                      loading={voicesLoading}
+                      accent="rose"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <PuterVoiceSelect
+                      label={`Voice for Character A${speakerEntries[0] ? ` · ${speakerEntries[0].label}` : ''}`}
+                      value={puterVoiceA}
+                      onChange={setPuterVoiceA}
+                      accent="indigo"
+                    />
+                    <PuterVoiceSelect
+                      label={`Voice for Character B${speakerEntries[1] ? ` · ${speakerEntries[1].label}` : ''}`}
+                      value={puterVoiceB}
+                      onChange={setPuterVoiceB}
+                      accent="rose"
+                    />
+                  </>
+                )}
               </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1019,6 +1152,30 @@ function VoiceSelect({ label, value, onChange, voices, loading, accent }) {
               </option>
             )
           })}
+      </select>
+    </label>
+  )
+}
+
+function PuterVoiceSelect({ label, value, onChange, accent }) {
+  const ringAccent =
+    accent === 'rose'
+      ? 'focus:ring-rose-200 focus:border-rose-400'
+      : 'focus:ring-indigo-200 focus:border-indigo-400'
+
+  return (
+    <label className="block min-w-0">
+      <span className="block text-sm font-medium text-slate-700 mb-1 truncate">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 ${ringAccent}`}
+      >
+        {PUTER_VOICES.map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.name}
+          </option>
+        ))}
       </select>
     </label>
   )
