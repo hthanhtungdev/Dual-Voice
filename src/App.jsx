@@ -184,6 +184,7 @@ const loadStored = () => {
 export default function App() {
   const stored = loadStored()
   const [ttsEngine, setTtsEngine] = useState(stored.ttsEngine || 'browser')
+  const [puterUser, setPuterUser] = useState(null)
   const [text, setText] = useState(stored.text || '')
   const [activeSample, setActiveSample] = useState(stored.activeSample ?? null)
   const [voices, setVoices] = useState([])
@@ -257,6 +258,26 @@ export default function App() {
       clearTimeout(retry2)
     }
   }, [])
+
+  // Check Puter auth status
+  useEffect(() => {
+    if (ttsEngine !== 'puter') return
+    if (typeof window.puter === 'undefined') return
+    const checkAuth = async () => {
+      try {
+        const signedIn = await window.puter.auth.isSignedIn()
+        if (signedIn) {
+          const user = await window.puter.auth.getUser()
+          setPuterUser(user)
+        } else {
+          setPuterUser(null)
+        }
+      } catch {
+        setPuterUser(null)
+      }
+    }
+    checkAuth()
+  }, [ttsEngine])
 
   useEffect(() => {
     if (!voices.length) return
@@ -352,6 +373,27 @@ export default function App() {
       setIsPlaying(true)
       setIsPaused(false)
 
+      // Pre-fetch cache for Puter TTS (key: queue pos -> Audio promise)
+      // Only prefetch 1 line ahead to avoid "too many concurrent requests"
+      const audioCache = new Map()
+
+      const prefetchNext = (currentPos) => {
+        const nextPos = currentPos + 1
+        const currentQueue = playableIndicesRef.current
+        if (nextPos >= currentQueue.length) return
+        if (audioCache.has(nextPos)) return
+        const idx = currentQueue[nextPos]
+        const { speaker, text: lineText } = parsed[idx]
+        const assignment = speakerAssignments[speaker.toLowerCase()]
+        const slot = assignment?.slot || 'A'
+        const settings = settingsRef.current
+        const voiceId = slot === 'A' ? settings.puterVoiceA : settings.puterVoiceB
+        const voiceInfo = PUTER_VOICES.find(v => v.id === voiceId)
+        const eng = voiceInfo?.engine || 'neural'
+        const promise = window.puter.ai.txt2speech(lineText, { voice: voiceId, engine: eng })
+        audioCache.set(nextPos, promise)
+      }
+
       const speakAt = (pos) => {
         if (myGen !== generationRef.current) return
         const currentQueue = playableIndicesRef.current
@@ -368,15 +410,12 @@ export default function App() {
         const slot = assignment?.slot || 'A'
 
         const settings = settingsRef.current
-        const engine = settings.ttsEngine || 'browser'
+        const engineType = settings.ttsEngine || 'browser'
 
-        if (engine === 'puter') {
-          // Puter.js TTS
+        if (engineType === 'puter') {
+          // Puter.js TTS with pre-fetching
           updateCurrent(i)
-          const voiceId = slot === 'A' ? settings.puterVoiceA : settings.puterVoiceB
           const speakRate = settings.lineRates?.[i] ?? (slot === 'A' ? settings.rateA : settings.rateB)
-          const voiceInfo = PUTER_VOICES.find(v => v.id === voiceId)
-          const engine = voiceInfo?.engine || 'neural'
 
           if (typeof window.puter === 'undefined' || !window.puter?.ai?.txt2speech) {
             setError('Puter.js is not loaded. Check your internet connection.')
@@ -384,10 +423,20 @@ export default function App() {
             return
           }
 
-          window.puter.ai.txt2speech(line, { voice: voiceId, engine })
+          // Prefetch only the next line
+          prefetchNext(pos)
+
+          // Get audio from cache or fetch now
+          const audioPromise = audioCache.get(pos) || (() => {
+            const voiceId = slot === 'A' ? settings.puterVoiceA : settings.puterVoiceB
+            const voiceInfo = PUTER_VOICES.find(v => v.id === voiceId)
+            const eng = voiceInfo?.engine || 'neural'
+            return window.puter.ai.txt2speech(line, { voice: voiceId, engine: eng })
+          })()
+
+          audioPromise
             .then((audio) => {
               if (myGen !== generationRef.current) return
-              // audio is a Blob or Audio element
               const audioEl = audio instanceof Audio ? audio : new Audio(URL.createObjectURL(audio))
               audioEl.playbackRate = speakRate
               puterAudioRef.current = audioEl
@@ -584,21 +633,60 @@ export default function App() {
         </header>
 
         {/* TTS Engine Toggle */}
-        <div className="mb-3 sm:mb-4 xl:mb-3 flex items-center justify-center gap-3 shrink-0">
-          <span className={`text-sm font-medium ${ttsEngine === 'browser' ? 'text-slate-900' : 'text-slate-400'}`}>
-            🖥️ Browser TTS
-          </span>
-          <button
-            type="button"
-            onClick={() => { stop(); setTtsEngine(ttsEngine === 'browser' ? 'puter' : 'browser') }}
-            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${ttsEngine === 'puter' ? 'bg-emerald-500' : 'bg-slate-300'}`}
-            aria-label="Toggle TTS engine"
-          >
-            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform ${ttsEngine === 'puter' ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
-          <span className={`text-sm font-medium ${ttsEngine === 'puter' ? 'text-emerald-700' : 'text-slate-400'}`}>
-            ☁️ Cloud TTS
-          </span>
+        <div className="mb-3 sm:mb-4 xl:mb-3 flex flex-col items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-medium ${ttsEngine === 'browser' ? 'text-slate-900' : 'text-slate-400'}`}>
+              🖥️ Browser TTS
+            </span>
+            <button
+              type="button"
+              onClick={() => { stop(); setTtsEngine(ttsEngine === 'browser' ? 'puter' : 'browser') }}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${ttsEngine === 'puter' ? 'bg-emerald-500' : 'bg-slate-300'}`}
+              aria-label="Toggle TTS engine"
+            >
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform ${ttsEngine === 'puter' ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <span className={`text-sm font-medium ${ttsEngine === 'puter' ? 'text-emerald-700' : 'text-slate-400'}`}>
+              ☁️ Cloud TTS
+            </span>
+          </div>
+          {ttsEngine === 'puter' && (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              {puterUser ? (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-emerald-700 font-medium">
+                    👤 {puterUser.username || puterUser.email || 'User'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await window.puter.auth.signOut()
+                      setPuterUser(null)
+                      // Trigger sign-in with new account
+                      await window.puter.auth.signIn()
+                      const user = await window.puter.auth.getUser()
+                      setPuterUser(user)
+                    }}
+                    className="rounded-md px-2 py-0.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+                  >
+                    Đổi tài khoản
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await window.puter.auth.signIn()
+                    const user = await window.puter.auth.getUser()
+                    setPuterUser(user)
+                  }}
+                  className="rounded-md px-2.5 py-1 text-xs font-medium text-white bg-emerald-500 hover:bg-emerald-600 transition"
+                >
+                  Đăng nhập Puter
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Audio Samples Section - hidden for now
