@@ -237,8 +237,8 @@ export default function App() {
   }, [playMode])
 
   useEffect(() => {
-    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB }
-  }, [voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB])
+    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB, kokoroStatus }
+  }, [voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB, kokoroStatus])
 
   // Persist user state to localStorage
   useEffect(() => {
@@ -437,7 +437,8 @@ export default function App() {
         setError('There is nothing to read. Paste a dialogue first.')
         return
       }
-      if (ttsEngine === 'kokoro' && kokoroStatus === 'loading') {
+      const settings = settingsRef.current
+      if (settings.ttsEngine === 'kokoro' && settings.kokoroStatus === 'loading') {
         setError('Kokoro model is still loading. Please wait.')
         return
       }
@@ -510,7 +511,7 @@ export default function App() {
 
           const runKokoro = async () => {
             try {
-              if (kokoroStatus !== 'ready' || !workerRef.current) {
+              if (settings.kokoroStatus !== 'ready' || !workerRef.current) {
                 setError('Kokoro model is still loading. Please wait.')
                 setIsPlaying(false)
                 updateCurrent(-1)
