@@ -158,6 +158,19 @@ function pickDefaultVoices(voices) {
 
 const STORAGE_KEY = 'dual-voice-state'
 
+const KOKORO_VOICES = [
+  { id: 'af_heart', name: 'Heart (Female)', gender: 'female' },
+  { id: 'af_bella', name: 'Bella (Female)', gender: 'female' },
+  { id: 'af_sarah', name: 'Sarah (Female)', gender: 'female' },
+  { id: 'af_nova', name: 'Nova (Female)', gender: 'female' },
+  { id: 'am_adam', name: 'Adam (Male)', gender: 'male' },
+  { id: 'am_michael', name: 'Michael (Male)', gender: 'male' },
+  { id: 'bf_emma', name: 'Emma (Female, British)', gender: 'female' },
+  { id: 'bm_george', name: 'George (Male, British)', gender: 'male' },
+]
+
+
+
 const PUTER_VOICES = [
   { id: 'Matthew', name: 'Matthew (Male)', gender: 'male', engine: 'neural' },
   { id: 'Joey', name: 'Joey (Male)', gender: 'male', engine: 'neural' },
@@ -192,6 +205,10 @@ export default function App() {
   const [voiceB, setVoiceB] = useState(stored.voiceB || '')
   const [puterVoiceA, setPuterVoiceA] = useState(stored.puterVoiceA || 'Matthew')
   const [puterVoiceB, setPuterVoiceB] = useState(stored.puterVoiceB || 'Joanna')
+  const [kokoroVoiceA, setKokoroVoiceA] = useState(stored.kokoroVoiceA || 'am_adam')
+  const [kokoroVoiceB, setKokoroVoiceB] = useState(stored.kokoroVoiceB || 'af_heart')
+  const [kokoroStatus, setKokoroStatus] = useState('') // '', 'loading', 'ready'
+  const [kokoroProgress, setKokoroProgress] = useState(null)
   const [rateA, setRateA] = useState(stored.rateA ?? stored.rate ?? 1)
   const [rateB, setRateB] = useState(stored.rateB ?? stored.rate ?? 1)
   const [lineRates, setLineRates] = useState(stored.lineRates || {})
@@ -211,24 +228,27 @@ export default function App() {
   const transcriptListRef = useRef(null)
   const playableIndicesRef = useRef([])
   const playModeRef = useRef('sequential')
+  const workerRef = useRef(null)
+  const pendingResolveRef = useRef(null)
+  const pendingRejectRef = useRef(null)
 
   useEffect(() => {
     playModeRef.current = playMode
   }, [playMode])
 
   useEffect(() => {
-    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB }
-  }, [voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB])
+    settingsRef.current = { voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB }
+  }, [voiceA, voiceB, rateA, rateB, lineRates, ttsEngine, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB])
 
   // Persist user state to localStorage
   useEffect(() => {
     try {
-      const data = { text, activeSample, voiceA, voiceB, puterVoiceA, puterVoiceB, rateA, rateB, playMode, lineRates, ttsEngine }
+      const data = { text, activeSample, voiceA, voiceB, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB, rateA, rateB, playMode, lineRates, ttsEngine }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // ignore (storage full / disabled)
     }
-  }, [text, activeSample, voiceA, voiceB, puterVoiceA, puterVoiceB, rateA, rateB, playMode, lineRates, ttsEngine])
+  }, [text, activeSample, voiceA, voiceB, puterVoiceA, puterVoiceB, kokoroVoiceA, kokoroVoiceB, rateA, rateB, playMode, lineRates, ttsEngine])
 
   // Reset line-specific rates when the dialogue script text changes
   useEffect(() => {
@@ -284,6 +304,72 @@ export default function App() {
     setVoiceA((prev) => prev || pickDefaultVoices(voices).a)
     setVoiceB((prev) => prev || pickDefaultVoices(voices).b)
   }, [voices])
+
+  // Initialize and manage Kokoro worker
+  useEffect(() => {
+    if (ttsEngine === 'kokoro') {
+      if (!workerRef.current) {
+        setKokoroStatus('loading')
+        setKokoroProgress(0)
+
+        const worker = new Worker(new URL('./kokoro.worker.js', import.meta.url), { type: 'module' })
+        workerRef.current = worker
+
+        worker.onmessage = (e) => {
+          const { type, status, info, error, wav } = e.data
+          if (type === 'progress') {
+            if (info.status === 'progress') {
+              let pct = info.progress
+              if (pct !== undefined) {
+                if (pct <= 1) pct = pct * 100
+                setKokoroProgress(Math.round(pct))
+              }
+            } else if (info.status === 'ready' || info.status === 'done') {
+              setKokoroProgress(100)
+            }
+          } else if (type === 'load-status') {
+            if (status === 'ready') {
+              setKokoroStatus('ready')
+              setKokoroProgress(null)
+            }
+          } else if (type === 'error') {
+            setError(`Kokoro error: ${error}`)
+            setKokoroStatus('')
+            setKokoroProgress(null)
+            setIsPlaying(false)
+            if (pendingRejectRef.current) {
+              pendingRejectRef.current(new Error(error))
+              pendingRejectRef.current = null
+            }
+          } else if (type === 'done') {
+            if (pendingResolveRef.current) {
+              pendingResolveRef.current(wav)
+              pendingResolveRef.current = null
+              pendingRejectRef.current = null
+            }
+          }
+        }
+
+        worker.postMessage({ type: 'load' })
+      }
+    } else {
+      if (workerRef.current) {
+        workerRef.current.terminate()
+        workerRef.current = null
+        setKokoroStatus('')
+        setKokoroProgress(null)
+      }
+    }
+  }, [ttsEngine])
+
+  // Terminate worker on unmount
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate()
+      }
+    }
+  }, [])
 
   const parsed = useMemo(() => parseDialogue(text), [text])
 
@@ -351,6 +437,10 @@ export default function App() {
         setError('There is nothing to read. Paste a dialogue first.')
         return
       }
+      if (ttsEngine === 'kokoro' && kokoroStatus === 'loading') {
+        setError('Kokoro model is still loading. Please wait.')
+        return
+      }
       const queue = playableIndicesRef.current
       if (!queue.length) {
         setError('No lines match the current filter.')
@@ -412,7 +502,64 @@ export default function App() {
         const settings = settingsRef.current
         const engineType = settings.ttsEngine || 'browser'
 
-        if (engineType === 'puter') {
+        if (engineType === 'kokoro') {
+          // Kokoro AI TTS (runs in background Web Worker)
+          updateCurrent(i)
+          const speakRate = settings.lineRates?.[i] ?? (slot === 'A' ? settings.rateA : settings.rateB)
+          const voiceId = slot === 'A' ? settings.kokoroVoiceA : settings.kokoroVoiceB
+
+          const runKokoro = async () => {
+            try {
+              if (kokoroStatus !== 'ready' || !workerRef.current) {
+                setError('Kokoro model is still loading. Please wait.')
+                setIsPlaying(false)
+                updateCurrent(-1)
+                return
+              }
+
+              // Send generation request to worker and wait for 'done'
+              const wav = await new Promise((resolve, reject) => {
+                pendingResolveRef.current = resolve
+                pendingRejectRef.current = reject
+                workerRef.current.postMessage({ type: 'generate', text: line, voice: voiceId })
+              })
+
+              if (myGen !== generationRef.current) return
+
+              const blob = new Blob([wav], { type: 'audio/wav' })
+              const url = URL.createObjectURL(blob)
+              const audioEl = new Audio(url)
+              audioEl.playbackRate = speakRate
+              puterAudioRef.current = audioEl
+              audioEl.onended = () => {
+                URL.revokeObjectURL(url)
+                if (myGen !== generationRef.current) return
+                puterAudioRef.current = null
+                if (playModeRef.current === 'single') {
+                  setIsPlaying(false)
+                  setIsPaused(false)
+                  return
+                }
+                speakAt(pos + 1)
+              }
+              audioEl.onerror = () => {
+                URL.revokeObjectURL(url)
+                if (myGen !== generationRef.current) return
+                puterAudioRef.current = null
+                setError('Kokoro TTS playback error.')
+                setIsPlaying(false)
+                updateCurrent(-1)
+              }
+              audioEl.play()
+            } catch (err) {
+              if (myGen !== generationRef.current) return
+              setError(`Kokoro TTS error: ${err.message || err}`)
+              setIsPlaying(false)
+              updateCurrent(-1)
+            }
+          }
+          runKokoro()
+        } else if (engineType === 'puter') {
           // Puter.js TTS with pre-fetching
           updateCurrent(i)
           const speakRate = settings.lineRates?.[i] ?? (slot === 'A' ? settings.rateA : settings.rateB)
@@ -551,6 +698,11 @@ export default function App() {
       puterAudioRef.current.pause()
       puterAudioRef.current = null
     }
+    if (pendingRejectRef.current) {
+      pendingRejectRef.current(new Error('Playback stopped.'))
+      pendingRejectRef.current = null
+    }
+    pendingResolveRef.current = null
     setIsPlaying(false)
     setIsPaused(false)
     updateCurrent(-1)
@@ -634,21 +786,25 @@ export default function App() {
 
         {/* TTS Engine Toggle */}
         <div className="mb-3 sm:mb-4 xl:mb-3 flex flex-col items-center gap-2 shrink-0">
-          <div className="flex items-center gap-3">
-            <span className={`text-sm font-medium ${ttsEngine === 'browser' ? 'text-slate-900' : 'text-slate-400'}`}>
-              🖥️ Browser TTS
-            </span>
-            <button
-              type="button"
-              onClick={() => { stop(); setTtsEngine(ttsEngine === 'browser' ? 'puter' : 'browser') }}
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${ttsEngine === 'puter' ? 'bg-emerald-500' : 'bg-slate-300'}`}
-              aria-label="Toggle TTS engine"
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-500">TTS Engine:</span>
+            <select
+              value={ttsEngine}
+              onChange={(e) => { stop(); setTtsEngine(e.target.value) }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
             >
-              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform ${ttsEngine === 'puter' ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
-            <span className={`text-sm font-medium ${ttsEngine === 'puter' ? 'text-emerald-700' : 'text-slate-400'}`}>
-              ☁️ Cloud TTS
-            </span>
+              <option value="browser">🖥️ Browser (Offline)</option>
+              <option value="kokoro">🧠 Kokoro AI (Offline, HD)</option>
+              <option value="puter">☁️ Cloud - Puter (Online)</option>
+            </select>
+            {kokoroStatus === 'loading' && ttsEngine === 'kokoro' && (
+              <span className="text-xs text-amber-600 animate-pulse">
+                Loading model{kokoroProgress !== null ? ` (${kokoroProgress}%)` : ''}...
+              </span>
+            )}
+            {kokoroStatus === 'ready' && ttsEngine === 'kokoro' && (
+              <span className="text-xs text-emerald-600">✓ Ready</span>
+            )}
           </div>
           {ttsEngine === 'puter' && (
             <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -662,7 +818,6 @@ export default function App() {
                     onClick={async () => {
                       await window.puter.auth.signOut()
                       setPuterUser(null)
-                      // Trigger sign-in with new account
                       await window.puter.auth.signIn()
                       const user = await window.puter.auth.getUser()
                       setPuterUser(user)
@@ -778,6 +933,21 @@ export default function App() {
                       accent="rose"
                     />
                   </>
+                ) : ttsEngine === 'kokoro' ? (
+                  <>
+                    <KokoroVoiceSelect
+                      label={`Voice for Character A${speakerEntries[0] ? ` · ${speakerEntries[0].label}` : ''}`}
+                      value={kokoroVoiceA}
+                      onChange={setKokoroVoiceA}
+                      accent="indigo"
+                    />
+                    <KokoroVoiceSelect
+                      label={`Voice for Character B${speakerEntries[1] ? ` · ${speakerEntries[1].label}` : ''}`}
+                      value={kokoroVoiceB}
+                      onChange={setKokoroVoiceB}
+                      accent="rose"
+                    />
+                  </>
                 ) : (
                   <>
                     <PuterVoiceSelect
@@ -830,12 +1000,21 @@ export default function App() {
                 {!isPlaying || isPaused ? (
                   <ControlButton
                     onClick={play}
-                    disabled={!hasDialogue || voicesLoading || playableIndices.length === 0}
+                    disabled={!hasDialogue || voicesLoading || playableIndices.length === 0 || kokoroStatus === 'loading'}
                     title={isPaused ? 'Resume' : 'Play dialogue'}
                     variant="primary"
                   >
-                    <PlayIcon />
-                    <span>{isPaused ? 'Resume' : 'Play'}</span>
+                    {kokoroStatus === 'loading' ? (
+                      <>
+                        <span className="animate-spin mr-1">⏳</span>
+                        <span>Loading{kokoroProgress !== null ? ` (${kokoroProgress}%)` : ''}…</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlayIcon />
+                        <span>{isPaused ? 'Resume' : 'Play'}</span>
+                      </>
+                    )}
                   </ControlButton>
                 ) : (
                   <ControlButton onClick={pause} title="Pause" variant="primary">
@@ -1260,6 +1439,30 @@ function PuterVoiceSelect({ label, value, onChange, accent }) {
         className={`w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 ${ringAccent}`}
       >
         {PUTER_VOICES.map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function KokoroVoiceSelect({ label, value, onChange, accent }) {
+  const ringAccent =
+    accent === 'rose'
+      ? 'focus:ring-rose-200 focus:border-rose-400'
+      : 'focus:ring-indigo-200 focus:border-indigo-400'
+
+  return (
+    <label className="block min-w-0">
+      <span className="block text-sm font-medium text-slate-700 mb-1 truncate">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 ${ringAccent}`}
+      >
+        {KOKORO_VOICES.map((v) => (
           <option key={v.id} value={v.id}>
             {v.name}
           </option>
