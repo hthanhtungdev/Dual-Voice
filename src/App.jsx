@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import KokoroWorker from './kokoro.worker?worker'
 
 const SAMPLE_1 = `Doctor: Hi, I'm Dr Lewis. What brings you in today?
 Patient: Hey. I wanted to get checked. I had casual sex about a week ago and I've been thinking about getting some Doxy
@@ -312,7 +313,7 @@ export default function App() {
         setKokoroStatus('loading')
         setKokoroProgress(0)
 
-        const worker = new Worker(new URL('./kokoro.worker.js', import.meta.url), { type: 'module' })
+        const worker = new KokoroWorker()
         workerRef.current = worker
 
         worker.onmessage = (e) => {
